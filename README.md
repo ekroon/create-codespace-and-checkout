@@ -28,7 +28,7 @@ Command-line options override environment variables when both are provided.
 
 ### Examples
 
-#### Basic usage (backward compatible)
+#### Basic usage
 ```sh
 ./create-codespace-and-checkout.sh my-branch
 ```
@@ -69,10 +69,3 @@ Common machine types include:
 
 For the most up-to-date list, check the [GitHub Codespaces documentation](https://docs.github.com/en/codespaces/setting-up-your-project-for-codespaces/setting-a-minimum-specification-for-codespace-machines).
 
-## Features
-
-- ✅ **Backward Compatible**: Original usage continues to work with existing defaults
-- ✅ **Environment Variables**: All parameters support environment variable configuration
-- ✅ **CLI Priority**: Command-line arguments override environment variables
-- ✅ **Dynamic Workspace**: Workspace paths automatically adjust based on repository name
-- ✅ **Error Handling**: Invalid arguments are properly rejected with helpful error messages
