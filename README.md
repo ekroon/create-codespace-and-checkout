@@ -1,6 +1,6 @@
 # create-codespace-and-checkout
 
-A tool to quickly create a GitHub Codespace and check out a repository for instant development.
+A tool to quickly create a GitHub Codespace and check out a branch for instant development.
 
 ## Installation
 
