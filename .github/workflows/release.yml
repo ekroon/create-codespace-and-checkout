@@ -1,4 +1,4 @@
-name: Release create-codespace-and-checkout
+name: Release
 
 on:
   push:
@@ -21,17 +21,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
 
       - name: Make script executable
         run: |
           cp create-codespace-and-checkout.sh create-codespace-and-checkout
-          chmod +x create-codespace-and-checkout
 
       - name: Create GitHub Release and upload script
         uses: softprops/action-gh-release@v2
         with:
           files: create-codespace-and-checkout
-          name: Release ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.event.inputs.tag || github.ref_name }}
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
