@@ -148,6 +148,13 @@ else
     exit 1
 fi
 
+print_status "Uploading xterm-ghostty terminfo to codespace..."
+if infocmp -x xterm-ghostty | gh cs ssh -c "${CODESPACE_NAME}" -- tic -x - >/dev/null 2>&1; then
+    print_status "Successfully uploaded xterm-ghostty terminfo."
+else
+    print_warning "Failed to upload xterm-ghostty terminfo. Terminal features may be limited."
+fi
+
 print_status "Checking if branch '$BRANCH_NAME' exists remotely..."
 REMOTE_CHECK=$(gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git ls-remote --heads origin $BRANCH_NAME'" 2>/dev/null || echo "")
 
