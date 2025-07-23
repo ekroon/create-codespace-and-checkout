@@ -6,8 +6,9 @@
 #   -R <repo>               Repository (default: github/github, env: REPO)
 #   -m <machine-type>       Codespace machine type (default: xLargePremiumLinux, env: CODESPACE_SIZE)
 #   --devcontainer-path <path>  Path to devcontainer (default: .devcontainer/devcontainer.json, env: DEVCONTAINER_PATH)
+#   --default-permissions   Use default permissions without authorization prompt
 
-set -e  # Exit on any error
+# set -e  # Exit on any error
 
 # Colors for output
 RED='\033[0;31m'
@@ -47,6 +48,7 @@ show_spinner() {
 REPO=${REPO:-"github/github"}
 CODESPACE_SIZE=${CODESPACE_SIZE:-"xLargePremiumLinux"}
 DEVCONTAINER_PATH=${DEVCONTAINER_PATH:-".devcontainer/devcontainer.json"}
+DEFAULT_PERMISSIONS=""
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -62,6 +64,10 @@ while [[ $# -gt 0 ]]; do
         --devcontainer-path)
             DEVCONTAINER_PATH="$2"
             shift 2
+            ;;
+        --default-permissions)
+            DEFAULT_PERMISSIONS="--default-permissions"
+            shift
             ;;
         -*)
             echo -e "\033[0;31m[ERROR]\033[0m Unknown option: $1"
@@ -93,13 +99,27 @@ print_status "Starting codespace creation process..."
 
 # Step 1: Create the codespace and capture the output
 print_status "Creating new codespace with $CODESPACE_SIZE machine type..."
-CODESPACE_OUTPUT=$(gh cs create -R "$REPO" -m "$CODESPACE_SIZE" --devcontainer-path "$DEVCONTAINER_PATH" 2>&1)
+CODESPACE_OUTPUT=$(gh cs create -R "$REPO" -m "$CODESPACE_SIZE" --devcontainer-path "$DEVCONTAINER_PATH" $DEFAULT_PERMISSIONS 2>&1)
 
 if [ $? -ne 0 ]; then
-    print_error "Failed to create codespace"
-    print_error "$CODESPACE_OUTPUT"
-    exit 1
+    # Check if the failure is due to permissions authorization required
+    if echo "$CODESPACE_OUTPUT" | grep -q "You must authorize or deny additional permissions"; then
+        print_error "Codespace creation requires additional permissions authorization"
+        print_error "Please authorize the permissions in your browser, then try again"
+        # Extract and display the authorization URL if present
+        AUTH_URL=$(echo "$CODESPACE_OUTPUT" | grep -o "https://github\.com/[^[:space:]]*")
+        if [ -n "$AUTH_URL" ]; then
+            print_status "Authorization URL: $AUTH_URL"
+        fi
+        print_warning "Alternatively, you can rerun this script with --default-permissions option"
+        exit 1
+    else
+        print_error "Failed to create codespace"
+        print_error "$CODESPACE_OUTPUT"
+        exit 1
+    fi
 fi
+
 
 # Extract the codespace name (last line of output)
 CODESPACE_NAME=$(echo "$CODESPACE_OUTPUT" | tail -n 1 | tr -d '\r\n')
