@@ -229,7 +229,7 @@ func waitForCodespaceReady(codespaceName, repoName string) error {
 }
 
 func fetchRemoteInfo(codespaceName, repoName string) error {
-	fmt.Printf("%s[INFO]%s Fetching latest remote information...", ColorGreen, ColorNC)
+	printStatus("Fetching latest remote information...")
 
 	// Use login shell like the original script - git auth is set up there
 	gitCmd := fmt.Sprintf("cd /workspaces/%s && git fetch origin", repoName)
