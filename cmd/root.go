@@ -32,16 +32,7 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "create-codespace-and-checkout [branch-name]",
-	Short: "Create a new codespace and checkout a git branch",
-	Long: `Create a new codespace and checkout a git branch.
-
-Options:
-  -R <repo>               Repository (default: github/github, env: REPO)
-  -m <machine-type>       Codespace machine type (default: xLargePremiumLinux, env: CODESPACE_SIZE)
-  --devcontainer-path <path>  Path to devcontainer (default: .devcontainer/devcontainer.json, env: DEVCONTAINER_PATH)
-  --default-permissions   Use default permissions without authorization prompt
-  --verbose               Show verbose output including command errors for debugging`,
+	Use:  "create-codespace-and-checkout [branch-name]",
 	Args: cobra.MaximumNArgs(1),
 	Run:  runCreateCodespace,
 }
