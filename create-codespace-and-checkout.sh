@@ -16,29 +16,41 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Function to print colored output
+# Function to print colored output using gum if available
 print_status() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+    if command -v gum >/dev/null 2>&1; then
+        mise x ubi:charmbracelet/gum -- gum style --foreground 2 "✓ $1"
+    else
+        echo -e "${GREEN}[INFO]${NC} $1"
+    fi
 }
 
 print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    if command -v gum >/dev/null 2>&1; then
+        mise x ubi:charmbracelet/gum -- gum style --foreground 3 "⚠ $1"
+    else
+        echo -e "${YELLOW}[WARNING]${NC} $1"
+    fi
 }
 
 print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    if command -v gum >/dev/null 2>&1; then
+        mise x ubi:charmbracelet/gum -- gum style --foreground 1 --bold "✗ $1"
+    else
+        echo -e "${RED}[ERROR]${NC} $1"
+    fi
 }
 
 # Function to show a simple spinner
 show_spinner() {
     local pid=$1
     local delay=0.1
-    local spinstr='|/-\'
-    while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
+    local spinstr='|/-\\'
+    while ps a | awk '{print $1}' | grep -q "$pid"; do
         local temp=${spinstr#?}
         printf " [%c]  " "$spinstr"
         local spinstr=$temp${spinstr%"$temp"}
-        sleep $delay
+        sleep "$delay"
         printf "\b\b\b\b\b\b"
     done
     printf "    \b\b\b\b"
@@ -70,7 +82,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -*)
-            echo -e "\033[0;31m[ERROR]\033[0m Unknown option: $1"
+            print_error "Unknown option: $1"
             exit 1
             ;;
         *)
@@ -88,7 +100,11 @@ BRANCH_NAME=${BRANCH_NAME:-""}
 REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
 
 if [ -z "$BRANCH_NAME" ]; then
-    read -p "Enter the branch name to checkout: " BRANCH_NAME
+    if command -v gum >/dev/null 2>&1; then
+        BRANCH_NAME=$(mise x ubi:charmbracelet/gum -- gum input --placeholder "Enter the branch name to checkout")
+    else
+        read -r -p "Enter the branch name to checkout: " BRANCH_NAME
+    fi
     if [ -z "$BRANCH_NAME" ]; then
         print_error "Branch name is required"
         exit 1
@@ -99,9 +115,7 @@ print_status "Starting codespace creation process..."
 
 # Step 1: Create the codespace and capture the output
 print_status "Creating new codespace with $CODESPACE_SIZE machine type..."
-CODESPACE_OUTPUT=$(gh cs create -R "$REPO" -m "$CODESPACE_SIZE" --devcontainer-path "$DEVCONTAINER_PATH" $DEFAULT_PERMISSIONS 2>&1)
-
-if [ $? -ne 0 ]; then
+if ! CODESPACE_OUTPUT=$(gh cs create -R "$REPO" -m "$CODESPACE_SIZE" --devcontainer-path "$DEVCONTAINER_PATH" $DEFAULT_PERMISSIONS 2>&1); then
     # Check if the failure is due to permissions authorization required
     if echo "$CODESPACE_OUTPUT" | grep -q "You must authorize or deny additional permissions"; then
         print_error "Codespace creation requires additional permissions authorization"
@@ -150,19 +164,28 @@ while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
 done
 
 # Step 3: Fetch latest remote information (silently with progress indicator)
-printf "${GREEN}[INFO]${NC} Fetching latest remote information..."
-gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git fetch origin'" >/dev/null 2>&1 &
-FETCH_PID=$!
+if command -v gum >/dev/null 2>&1; then
+    mise x ubi:charmbracelet/gum -- gum spin --spinner dot --title "Fetching latest remote information..." -- gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git fetch origin'"
+    FETCH_EXIT_CODE=$?
+else
+    printf '%s[INFO]%s Fetching latest remote information...' "$GREEN" "$NC"
+    gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git fetch origin'" >/dev/null 2>&1 &
+    FETCH_PID=$!
 
-# Show spinner while fetching
-show_spinner $FETCH_PID
-wait $FETCH_PID
-FETCH_EXIT_CODE=$?
+    # Show spinner while fetching
+    show_spinner $FETCH_PID
+    wait $FETCH_PID
+    FETCH_EXIT_CODE=$?
+fi
 
 if [ $FETCH_EXIT_CODE -eq 0 ]; then
-    echo " ✓"
+    if ! command -v gum >/dev/null 2>&1; then
+        echo " ✓"
+    fi
 else
-    echo " ✗"
+    if ! command -v gum >/dev/null 2>&1; then
+        echo " ✗"
+    fi
     print_error "Failed to fetch from remote. Git authentication may not be ready yet."
     print_warning "Try connecting to the codespace manually: gh cs ssh -c $CODESPACE_NAME"
     exit 1
@@ -181,18 +204,22 @@ REMOTE_CHECK=$(gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$RE
 # Step 4: Checkout the branch
 if [ -n "$REMOTE_CHECK" ]; then
     print_status "Branch '$BRANCH_NAME' exists remotely, checking out..."
-    gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git checkout $BRANCH_NAME'" >/dev/null 2>&1
+    if gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git checkout $BRANCH_NAME'" >/dev/null 2>&1; then
+        print_status "Successfully checked out branch '$BRANCH_NAME' in codespace '$CODESPACE_NAME'"
+    else
+        print_error "Failed to checkout branch '$BRANCH_NAME'"
+        print_warning "Codespace '$CODESPACE_NAME' was created but branch checkout failed"
+        exit 1
+    fi
 else
     print_warning "Branch '$BRANCH_NAME' doesn't exist remotely. Creating new branch..."
-    gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git checkout -b $BRANCH_NAME'" >/dev/null 2>&1
-fi
-
-if [ $? -eq 0 ]; then
-    print_status "Successfully checked out branch '$BRANCH_NAME' in codespace '$CODESPACE_NAME'"
-else
-    print_error "Failed to checkout branch '$BRANCH_NAME'"
-    print_warning "Codespace '$CODESPACE_NAME' was created but branch checkout failed"
-    exit 1
+    if gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git checkout -b $BRANCH_NAME'" >/dev/null 2>&1; then
+        print_status "Successfully checked out branch '$BRANCH_NAME' in codespace '$CODESPACE_NAME'"
+    else
+        print_error "Failed to checkout branch '$BRANCH_NAME'"
+        print_warning "Codespace '$CODESPACE_NAME' was created but branch checkout failed"
+        exit 1
+    fi
 fi
 
 # Step 5: Wait for codespace configuration to complete
