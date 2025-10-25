@@ -115,7 +115,7 @@ print_status "Starting codespace creation process..."
 
 # Step 1: Create the codespace and capture the output
 print_status "Creating new codespace with $CODESPACE_SIZE machine type..."
-if ! CODESPACE_OUTPUT=$(gh cs create -R "$REPO" -m "$CODESPACE_SIZE" --devcontainer-path "$DEVCONTAINER_PATH" $DEFAULT_PERMISSIONS 2>&1); then
+if ! CODESPACE_OUTPUT=$(gh cs create -R "$REPO" -m "$CODESPACE_SIZE" --devcontainer-path "$DEVCONTAINER_PATH" "$DEFAULT_PERMISSIONS" 2>&1); then
     # Check if the failure is due to permissions authorization required
     if echo "$CODESPACE_OUTPUT" | grep -q "You must authorize or deny additional permissions"; then
         print_error "Codespace creation requires additional permissions authorization"
@@ -192,7 +192,7 @@ else
 fi
 
 print_status "Uploading xterm-ghostty terminfo to codespace..."
-if infocmp -x xterm-ghostty | gh cs ssh -c "${CODESPACE_NAME}" -- tic -x - >/dev/null 2>&1; then
+if infocmp -x xterm-ghostty | gh cs ssh -c "$CODESPACE_NAME" -- tic -x - >/dev/null 2>&1; then
     print_status "Successfully uploaded xterm-ghostty terminfo."
 else
     print_warning "Failed to upload xterm-ghostty terminfo. Terminal features may be limited."
@@ -204,7 +204,7 @@ REMOTE_CHECK=$(gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$RE
 # Step 4: Checkout the branch
 if [ -n "$REMOTE_CHECK" ]; then
     print_status "Branch '$BRANCH_NAME' exists remotely, checking out..."
-    if gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git checkout $BRANCH_NAME'" >/dev/null 2>&1; then
+    if gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git checkout \"$BRANCH_NAME\"'" >/dev/null 2>&1; then
         print_status "Successfully checked out branch '$BRANCH_NAME' in codespace '$CODESPACE_NAME'"
     else
         print_error "Failed to checkout branch '$BRANCH_NAME'"
@@ -213,7 +213,7 @@ if [ -n "$REMOTE_CHECK" ]; then
     fi
 else
     print_warning "Branch '$BRANCH_NAME' doesn't exist remotely. Creating new branch..."
-    if gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git checkout -b $BRANCH_NAME'" >/dev/null 2>&1; then
+    if gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git checkout -b \"$BRANCH_NAME\"'" >/dev/null 2>&1; then
         print_status "Successfully checked out branch '$BRANCH_NAME' in codespace '$CODESPACE_NAME'"
     else
         print_error "Failed to checkout branch '$BRANCH_NAME'"
