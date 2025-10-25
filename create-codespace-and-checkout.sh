@@ -16,9 +16,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Function to print colored output using gum if available
+# Function to print colored output using gum if mise is available
 print_status() {
-    if command -v gum >/dev/null 2>&1; then
+    if command -v mise >/dev/null 2>&1; then
         mise x ubi:charmbracelet/gum -- gum style --foreground 2 "✓ $1"
     else
         echo -e "${GREEN}[INFO]${NC} $1"
@@ -26,7 +26,7 @@ print_status() {
 }
 
 print_warning() {
-    if command -v gum >/dev/null 2>&1; then
+    if command -v mise >/dev/null 2>&1; then
         mise x ubi:charmbracelet/gum -- gum style --foreground 3 "⚠ $1"
     else
         echo -e "${YELLOW}[WARNING]${NC} $1"
@@ -34,7 +34,7 @@ print_warning() {
 }
 
 print_error() {
-    if command -v gum >/dev/null 2>&1; then
+    if command -v mise >/dev/null 2>&1; then
         mise x ubi:charmbracelet/gum -- gum style --foreground 1 --bold "✗ $1"
     else
         echo -e "${RED}[ERROR]${NC} $1"
@@ -100,7 +100,7 @@ BRANCH_NAME=${BRANCH_NAME:-""}
 REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
 
 if [ -z "$BRANCH_NAME" ]; then
-    if command -v gum >/dev/null 2>&1; then
+    if command -v mise >/dev/null 2>&1; then
         BRANCH_NAME=$(mise x ubi:charmbracelet/gum -- gum input --placeholder "Enter the branch name to checkout")
     else
         read -r -p "Enter the branch name to checkout: " BRANCH_NAME
@@ -164,7 +164,7 @@ while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
 done
 
 # Step 3: Fetch latest remote information (silently with progress indicator)
-if command -v gum >/dev/null 2>&1; then
+if command -v mise >/dev/null 2>&1; then
     mise x ubi:charmbracelet/gum -- gum spin --spinner dot --title "Fetching latest remote information..." -- gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git fetch origin'"
     FETCH_EXIT_CODE=$?
 else
@@ -179,11 +179,11 @@ else
 fi
 
 if [ $FETCH_EXIT_CODE -eq 0 ]; then
-    if ! command -v gum >/dev/null 2>&1; then
+    if ! command -v mise >/dev/null 2>&1; then
         echo " ✓"
     fi
 else
-    if ! command -v gum >/dev/null 2>&1; then
+    if ! command -v mise >/dev/null 2>&1; then
         echo " ✗"
     fi
     print_error "Failed to fetch from remote. Git authentication may not be ready yet."
