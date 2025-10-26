@@ -98,7 +98,7 @@ print_status "Starting codespace creation process..."
 
 # Step 1: Create the codespace and capture the output
 print_status "Creating new codespace with $CODESPACE_SIZE machine type..."
-if ! CODESPACE_OUTPUT=$(gh cs create -R "$REPO" -m "$CODESPACE_SIZE" --devcontainer-path "$DEVCONTAINER_PATH" "$DEFAULT_PERMISSIONS" 2>&1); then
+if ! CODESPACE_OUTPUT=$(gh cs create -R "$REPO" -m "$CODESPACE_SIZE" --devcontainer-path "$DEVCONTAINER_PATH" $DEFAULT_PERMISSIONS 2>&1); then
     # Check if the failure is due to permissions authorization required
     if echo "$CODESPACE_OUTPUT" | grep -q "You must authorize or deny additional permissions"; then
         print_error "Codespace creation requires additional permissions authorization"
