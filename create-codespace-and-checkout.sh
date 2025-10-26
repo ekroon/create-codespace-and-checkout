@@ -13,19 +13,18 @@
 # Function to show help/usage information (defined early so it can be called before dependency checks)
 show_help() {
     cat << EOF
-Usage: ./create-codespace-and-checkout.sh [options] [branch-name]
+Usage: ./create-codespace-and-checkout.sh [options]
 
 Create a GitHub Codespace and checkout a git branch.
 
 Options:
+  -b <branch>                  Branch name to checkout (required if not provided interactively)
   -R <repo>                    Repository (default: github/github, env: REPO)
   -m <machine-type>            Codespace machine type (default: xLargePremiumLinux, env: CODESPACE_SIZE)
   --devcontainer-path <path>   Path to devcontainer (default: .devcontainer/devcontainer.json, env: DEVCONTAINER_PATH)
   --default-permissions        Use default permissions without authorization prompt
+  -x, --immediate              Skip interactive prompts for unspecified options (use defaults or fail)
   -h, --help                   Show this help message and exit
-
-Arguments:
-  branch-name                  Name of the branch to checkout (required if not provided interactively)
 
 Environment Variables:
   REPO                         Override default repository
@@ -34,9 +33,10 @@ Environment Variables:
   GUM_LOG_*                   Customize log formatting (see gum log documentation)
 
 Examples:
-  ./create-codespace-and-checkout.sh my-branch
-  ./create-codespace-and-checkout.sh -R myorg/myrepo -m large my-branch
-  REPO=myorg/myrepo ./create-codespace-and-checkout.sh my-branch
+  ./create-codespace-and-checkout.sh -b my-branch
+  ./create-codespace-and-checkout.sh -R myorg/myrepo -m large -b my-branch
+  ./create-codespace-and-checkout.sh -x -b my-branch  # Skip interactive prompts
+  REPO=myorg/myrepo ./create-codespace-and-checkout.sh  # Interactive mode
 EOF
     exit 0
 }
@@ -129,12 +129,18 @@ REPO=${REPO:-"github/github"}
 CODESPACE_SIZE=${CODESPACE_SIZE:-"xLargePremiumLinux"}
 DEVCONTAINER_PATH=${DEVCONTAINER_PATH:-".devcontainer/devcontainer.json"}
 DEFAULT_PERMISSIONS=""
+BRANCH_NAME=""
+IMMEDIATE_MODE=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         -h|--help)
             show_help
+            ;;
+        -b)
+            BRANCH_NAME="$2"
+            shift 2
             ;;
         -R)
             REPO="$2"
@@ -152,31 +158,65 @@ while [[ $# -gt 0 ]]; do
             DEFAULT_PERMISSIONS="--default-permissions"
             shift
             ;;
+        -x|--immediate)
+            IMMEDIATE_MODE=true
+            shift
+            ;;
         -*)
             print_error "Unknown option: $1"
             echo "Use --help to see available options"
             exit 1
             ;;
         *)
-            # This is the branch name
-            BRANCH_NAME="$1"
-            shift
+            print_error "Unexpected argument: $1"
+            echo "Use -b <branch> to specify a branch name"
+            echo "Use --help to see available options"
+            exit 1
             ;;
     esac
 done
 
-# Check if branch name is provided
-BRANCH_NAME=${BRANCH_NAME:-""}
-
 # Extract repository name from REPO (e.g., "github/github" -> "github")
 REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
 
-if [ -z "$BRANCH_NAME" ]; then
-    BRANCH_NAME=$(mise x ubi:charmbracelet/gum -- gum input --placeholder "Enter the branch name to checkout")
-    if [ -z "$BRANCH_NAME" ]; then
-        print_error "Branch name is required"
-        exit 1
+# Interactive mode: prompt for unspecified options unless immediate mode is enabled
+if [ "$IMMEDIATE_MODE" = false ]; then
+    # Prompt for repository if not specified
+    if [ "$REPO" = "github/github" ]; then
+        REPO_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --placeholder "Repository (default: github/github)" --value "$REPO")
+        if [ -n "$REPO_INPUT" ]; then
+            REPO="$REPO_INPUT"
+            REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
+        fi
     fi
+    
+    # Prompt for machine type if not specified
+    if [ "$CODESPACE_SIZE" = "xLargePremiumLinux" ]; then
+        CODESPACE_SIZE_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --placeholder "Machine type (default: xLargePremiumLinux)" --value "$CODESPACE_SIZE")
+        if [ -n "$CODESPACE_SIZE_INPUT" ]; then
+            CODESPACE_SIZE="$CODESPACE_SIZE_INPUT"
+        fi
+    fi
+    
+    # Prompt for devcontainer path if not specified
+    if [ "$DEVCONTAINER_PATH" = ".devcontainer/devcontainer.json" ]; then
+        DEVCONTAINER_PATH_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --placeholder "Devcontainer path (default: .devcontainer/devcontainer.json)" --value "$DEVCONTAINER_PATH")
+        if [ -n "$DEVCONTAINER_PATH_INPUT" ]; then
+            DEVCONTAINER_PATH="$DEVCONTAINER_PATH_INPUT"
+        fi
+    fi
+    
+    # Prompt for branch name if not specified
+    if [ -z "$BRANCH_NAME" ]; then
+        BRANCH_NAME=$(mise x ubi:charmbracelet/gum -- gum input --placeholder "Enter the branch name to checkout")
+    fi
+fi
+
+# Validate required parameters
+if [ -z "$BRANCH_NAME" ]; then
+    print_error "Branch name is required"
+    echo "Use -b <branch> to specify a branch or run without -x for interactive mode"
+    exit 1
 fi
 
 print_status "Starting codespace creation process..."
