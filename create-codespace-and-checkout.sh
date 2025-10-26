@@ -10,38 +10,23 @@
 
 # set -e  # Exit on any error
 
-# Check for required dependencies (plain output, no colors)
+# Check for required dependencies
 MISSING_DEPS=()
 
 if ! command -v gh >/dev/null 2>&1; then
     MISSING_DEPS+=("gh")
 fi
 
-if ! command -v git >/dev/null 2>&1; then
-    MISSING_DEPS+=("git")
-fi
-
 if ! command -v mise >/dev/null 2>&1; then
     MISSING_DEPS+=("mise")
 fi
 
+if ! command -v infocmp >/dev/null 2>&1; then
+    MISSING_DEPS+=("infocmp")
+fi
+
 if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
     echo "[ERROR] Missing required dependencies: ${MISSING_DEPS[*]}"
-    echo ""
-    echo "Please install the missing tools:"
-    for dep in "${MISSING_DEPS[@]}"; do
-        case $dep in
-            gh)
-                echo "  - gh (GitHub CLI): https://cli.github.com/"
-                ;;
-            git)
-                echo "  - git: https://git-scm.com/"
-                ;;
-            mise)
-                echo "  - mise: https://mise.jdx.dev/"
-                ;;
-        esac
-    done
     exit 1
 fi
 
