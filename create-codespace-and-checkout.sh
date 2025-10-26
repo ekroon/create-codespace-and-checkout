@@ -30,17 +30,34 @@ if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
     exit 1
 fi
 
-# Function to print status messages using gum log
+# Helper function to set gum log style defaults
+_gum_set_default() {
+    # $1 = var name, $2 = default value
+    if [ -z "${!1+x}" ]; then
+        export "$1=$2"
+    fi
+}
+
+# Set default gum log styling (can be overridden via environment)
+_gum_set_default GUM_LOG_LEVEL_FOREGROUND 212
+_gum_set_default GUM_LOG_LEVEL_BOLD true
+_gum_set_default GUM_LOG_TIME_FOREGROUND 244
+_gum_set_default GUM_LOG_MESSAGE_FOREGROUND 254
+_gum_set_default GUM_LOG_KEY_FOREGROUND 240
+_gum_set_default GUM_LOG_VALUE_FOREGROUND 118
+_gum_set_default GUM_LOG_SEPARATOR_FOREGROUND 240
+
+# Function to print status messages using gum log with structured formatting
 print_status() {
-    mise x ubi:charmbracelet/gum -- gum log --level info "$1"
+    mise x ubi:charmbracelet/gum -- gum log --structured --level info --time rfc822 "$1"
 }
 
 print_warning() {
-    mise x ubi:charmbracelet/gum -- gum log --level warn "$1"
+    mise x ubi:charmbracelet/gum -- gum log --structured --level warn --time rfc822 "$1"
 }
 
 print_error() {
-    mise x ubi:charmbracelet/gum -- gum log --level error "$1"
+    mise x ubi:charmbracelet/gum -- gum log --structured --level error --time rfc822 "$1"
 }
 
 # Set defaults from environment variables or use built-in defaults
