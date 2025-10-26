@@ -10,6 +10,16 @@
 
 # set -e  # Exit on any error
 
+# Signal handler for clean exit on CTRL-C (SIGINT) and SIGTERM
+cleanup_on_exit() {
+    echo ""
+    echo "Interrupted. Exiting..."
+    exit 130
+}
+
+# Trap SIGINT (CTRL-C) and SIGTERM
+trap cleanup_on_exit SIGINT SIGTERM
+
 # Function to show help/usage information (defined early so it can be called before dependency checks)
 show_help() {
     cat << EOF
