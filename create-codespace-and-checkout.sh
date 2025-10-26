@@ -10,6 +10,44 @@
 
 # set -e  # Exit on any error
 
+# Function to show help/usage information (defined early so it can be called before dependency checks)
+show_help() {
+    cat << EOF
+Usage: ./create-codespace-and-checkout.sh [options] [branch-name]
+
+Create a GitHub Codespace and checkout a git branch.
+
+Options:
+  -R <repo>                    Repository (default: github/github, env: REPO)
+  -m <machine-type>            Codespace machine type (default: xLargePremiumLinux, env: CODESPACE_SIZE)
+  --devcontainer-path <path>   Path to devcontainer (default: .devcontainer/devcontainer.json, env: DEVCONTAINER_PATH)
+  --default-permissions        Use default permissions without authorization prompt
+  -h, --help                   Show this help message and exit
+
+Arguments:
+  branch-name                  Name of the branch to checkout (required if not provided interactively)
+
+Environment Variables:
+  REPO                         Override default repository
+  CODESPACE_SIZE              Override default machine type
+  DEVCONTAINER_PATH           Override default devcontainer path
+  GUM_LOG_*                   Customize log formatting (see gum log documentation)
+
+Examples:
+  ./create-codespace-and-checkout.sh my-branch
+  ./create-codespace-and-checkout.sh -R myorg/myrepo -m large my-branch
+  REPO=myorg/myrepo ./create-codespace-and-checkout.sh my-branch
+EOF
+    exit 0
+}
+
+# Check for help option first (before dependency checks)
+for arg in "$@"; do
+    if [ "$arg" = "-h" ] || [ "$arg" = "--help" ]; then
+        show_help
+    fi
+done
+
 # Check for required dependencies
 MISSING_DEPS=()
 
@@ -60,6 +98,32 @@ print_error() {
     mise x ubi:charmbracelet/gum -- gum log --structured --level error --time rfc822 "$1"
 }
 
+# Generic retry function for waiting on conditions
+# Usage: retry_until <max_attempts> <sleep_seconds> <description> <command>
+retry_until() {
+    local max_attempts=$1
+    local sleep_seconds=$2
+    local description=$3
+    shift 3
+    local command=("$@")
+    
+    local attempt=1
+    while [ $attempt -le "$max_attempts" ]; do
+        print_status "$description (attempt $attempt/$max_attempts)..."
+        
+        if "${command[@]}" >/dev/null 2>&1; then
+            return 0
+        fi
+        
+        if [ $attempt -eq "$max_attempts" ]; then
+            return 1
+        fi
+        
+        sleep "$sleep_seconds"
+        attempt=$((attempt + 1))
+    done
+}
+
 # Set defaults from environment variables or use built-in defaults
 REPO=${REPO:-"github/github"}
 CODESPACE_SIZE=${CODESPACE_SIZE:-"xLargePremiumLinux"}
@@ -69,6 +133,9 @@ DEFAULT_PERMISSIONS=""
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        -h|--help)
+            show_help
+            ;;
         -R)
             REPO="$2"
             shift 2
@@ -87,6 +154,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         -*)
             print_error "Unknown option: $1"
+            echo "Use --help to see available options"
             exit 1
             ;;
         *)
@@ -142,26 +210,14 @@ print_status "Codespace created successfully: $CODESPACE_NAME"
 
 # Step 2: Wait for the codespace to be fully ready
 print_status "Waiting for codespace to be fully ready..."
-MAX_ATTEMPTS=30
-ATTEMPT=1
 
-while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-    print_status "Checking codespace readiness (attempt $ATTEMPT/$MAX_ATTEMPTS)..."
-    
-    # Check if we can successfully connect and the workspace is ready
-    if gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'test -d /workspaces/$REPO_NAME && cd /workspaces/$REPO_NAME && pwd'" >/dev/null 2>&1; then
-        print_status "Codespace is ready!"
-        break
-    fi
-    
-    if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
-        print_error "Codespace failed to become ready after $MAX_ATTEMPTS attempts"
-        exit 1
-    fi
-    
-    sleep 10
-    ATTEMPT=$((ATTEMPT + 1))
-done
+if ! retry_until 30 10 "Checking codespace readiness" \
+    gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'test -d /workspaces/$REPO_NAME && cd /workspaces/$REPO_NAME && pwd'"; then
+    print_error "Codespace failed to become ready after 30 attempts"
+    exit 1
+fi
+
+print_status "Codespace is ready!"
 
 # Step 3: Fetch latest remote information (silently with progress indicator)
 mise x ubi:charmbracelet/gum -- gum spin --spinner dot --title "Fetching latest remote information..." -- gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git fetch origin'"
@@ -206,29 +262,20 @@ fi
 
 # Step 5: Wait for codespace configuration to complete
 print_status "Waiting for codespace configuration to complete..."
-CONFIG_MAX_ATTEMPTS=60  # 10 minutes total (60 * 10 seconds)
-CONFIG_ATTEMPT=1
 
-while [ $CONFIG_ATTEMPT -le $CONFIG_MAX_ATTEMPTS ]; do
-    print_status "Checking configuration status (attempt $CONFIG_ATTEMPT/$CONFIG_MAX_ATTEMPTS)..."
-    
-    # Check the last log line to see if configuration is finished
-    LAST_LOG=$(gh cs logs --codespace "$CODESPACE_NAME" | tail -n 1 2>/dev/null || echo "")
-    
-    if [[ "$LAST_LOG" == *"Finished configuring codespace."* ]]; then
-        print_status "Codespace configuration complete! ✓"
-        break
-    fi
-    
-    if [ $CONFIG_ATTEMPT -eq $CONFIG_MAX_ATTEMPTS ]; then
-        print_warning "Codespace configuration did not complete after $CONFIG_MAX_ATTEMPTS attempts"
-        print_warning "The codespace may still be configuring in the background"
-        break
-    fi
-    
-    sleep 10
-    CONFIG_ATTEMPT=$((CONFIG_ATTEMPT + 1))
-done
+# Helper function to check if configuration is complete
+_check_config_complete() {
+    local last_log
+    last_log=$(gh cs logs --codespace "$CODESPACE_NAME" 2>/dev/null | tail -n 1 || echo "")
+    [[ "$last_log" == *"Finished configuring codespace."* ]]
+}
+
+if retry_until 60 10 "Checking configuration status" _check_config_complete; then
+    print_status "Codespace configuration complete! ✓"
+else
+    print_warning "Codespace configuration did not complete after 60 attempts"
+    print_warning "The codespace may still be configuring in the background"
+fi
 
 print_status "Setup complete! Your codespace is ready with branch '$BRANCH_NAME' checked out."
 print_status "Connect with: gh cs ssh -c $CODESPACE_NAME"
