@@ -10,13 +10,7 @@
 
 # set -e  # Exit on any error
 
-# Colors for output (needed for error messages)
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-# Check for required dependencies
+# Check for required dependencies (plain output, no colors)
 MISSING_DEPS=()
 
 if ! command -v gh >/dev/null 2>&1; then
@@ -27,8 +21,12 @@ if ! command -v git >/dev/null 2>&1; then
     MISSING_DEPS+=("git")
 fi
 
+if ! command -v mise >/dev/null 2>&1; then
+    MISSING_DEPS+=("mise")
+fi
+
 if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
-    echo -e "${RED}[ERROR]${NC} Missing required dependencies: ${MISSING_DEPS[*]}"
+    echo "[ERROR] Missing required dependencies: ${MISSING_DEPS[*]}"
     echo ""
     echo "Please install the missing tools:"
     for dep in "${MISSING_DEPS[@]}"; do
@@ -39,41 +37,25 @@ if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
             git)
                 echo "  - git: https://git-scm.com/"
                 ;;
+            mise)
+                echo "  - mise: https://mise.jdx.dev/"
+                ;;
         esac
     done
     exit 1
 fi
 
-# Check if mise is available for enhanced UI
-if command -v mise >/dev/null 2>&1; then
-    USE_GUM=true
-else
-    USE_GUM=false
-fi
-
-# Function to print colored output using gum if available
+# Function to print status messages using gum log
 print_status() {
-    if [ "$USE_GUM" = true ]; then
-        mise x ubi:charmbracelet/gum -- gum style --foreground 2 "✓ $1"
-    else
-        echo -e "${GREEN}[INFO]${NC} $1"
-    fi
+    mise x ubi:charmbracelet/gum -- gum log --level info "$1"
 }
 
 print_warning() {
-    if [ "$USE_GUM" = true ]; then
-        mise x ubi:charmbracelet/gum -- gum style --foreground 3 "⚠ $1"
-    else
-        echo -e "${YELLOW}[WARNING]${NC} $1"
-    fi
+    mise x ubi:charmbracelet/gum -- gum log --level warn "$1"
 }
 
 print_error() {
-    if [ "$USE_GUM" = true ]; then
-        mise x ubi:charmbracelet/gum -- gum style --foreground 1 --bold "✗ $1"
-    else
-        echo -e "${RED}[ERROR]${NC} $1"
-    fi
+    mise x ubi:charmbracelet/gum -- gum log --level error "$1"
 }
 
 # Set defaults from environment variables or use built-in defaults
@@ -120,11 +102,7 @@ BRANCH_NAME=${BRANCH_NAME:-""}
 REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
 
 if [ -z "$BRANCH_NAME" ]; then
-    if [ "$USE_GUM" = true ]; then
-        BRANCH_NAME=$(mise x ubi:charmbracelet/gum -- gum input --placeholder "Enter the branch name to checkout")
-    else
-        read -r -p "Enter the branch name to checkout: " BRANCH_NAME
-    fi
+    BRANCH_NAME=$(mise x ubi:charmbracelet/gum -- gum input --placeholder "Enter the branch name to checkout")
     if [ -z "$BRANCH_NAME" ]; then
         print_error "Branch name is required"
         exit 1
@@ -184,17 +162,8 @@ while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
 done
 
 # Step 3: Fetch latest remote information (silently with progress indicator)
-if [ "$USE_GUM" = true ]; then
-    mise x ubi:charmbracelet/gum -- gum spin --spinner dot --title "Fetching latest remote information..." -- gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git fetch origin'"
-    FETCH_EXIT_CODE=$?
-else
-    print_status "Fetching latest remote information..."
-    if gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git fetch origin'" >/dev/null 2>&1; then
-        FETCH_EXIT_CODE=0
-    else
-        FETCH_EXIT_CODE=1
-    fi
-fi
+mise x ubi:charmbracelet/gum -- gum spin --spinner dot --title "Fetching latest remote information..." -- gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git fetch origin'"
+FETCH_EXIT_CODE=$?
 
 if [ $FETCH_EXIT_CODE -ne 0 ]; then
     print_error "Failed to fetch from remote. Git authentication may not be ready yet."
