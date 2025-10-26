@@ -10,18 +10,46 @@
 
 # set -e  # Exit on any error
 
+# Colors for output (needed for error messages)
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Check for required dependencies
+MISSING_DEPS=()
+
+if ! command -v gh >/dev/null 2>&1; then
+    MISSING_DEPS+=("gh")
+fi
+
+if ! command -v git >/dev/null 2>&1; then
+    MISSING_DEPS+=("git")
+fi
+
+if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
+    echo -e "${RED}[ERROR]${NC} Missing required dependencies: ${MISSING_DEPS[*]}"
+    echo ""
+    echo "Please install the missing tools:"
+    for dep in "${MISSING_DEPS[@]}"; do
+        case $dep in
+            gh)
+                echo "  - gh (GitHub CLI): https://cli.github.com/"
+                ;;
+            git)
+                echo "  - git: https://git-scm.com/"
+                ;;
+        esac
+    done
+    exit 1
+fi
+
 # Check if mise is available for enhanced UI
 if command -v mise >/dev/null 2>&1; then
     USE_GUM=true
 else
     USE_GUM=false
 fi
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
 
 # Function to print colored output using gum if available
 print_status() {
