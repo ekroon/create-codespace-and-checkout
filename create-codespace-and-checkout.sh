@@ -15,15 +15,15 @@ show_help() {
     cat << EOF
 Usage: ./create-codespace-and-checkout.sh [options]
 
-Create a GitHub Codespace and checkout a git branch.
+Create a GitHub Codespace and optionally checkout a git branch.
 
 Options:
-  -b <branch>                  Branch name to checkout (required if not provided interactively)
+  -b <branch>                  Branch name to checkout (optional, if not provided uses default branch)
   -R <repo>                    Repository (default: github/github, env: REPO)
   -m <machine-type>            Codespace machine type (default: xLargePremiumLinux, env: CODESPACE_SIZE)
   --devcontainer-path <path>   Path to devcontainer (default: .devcontainer/devcontainer.json, env: DEVCONTAINER_PATH)
   --default-permissions        Use default permissions without authorization prompt
-  -x, --immediate              Skip interactive prompts for unspecified options (use defaults or fail)
+  -x, --immediate              Skip interactive prompts for unspecified options (use defaults)
   -h, --help                   Show this help message and exit
 
 Environment Variables:
@@ -36,7 +36,8 @@ Examples:
   ./create-codespace-and-checkout.sh -b my-branch
   ./create-codespace-and-checkout.sh -R myorg/myrepo -m large -b my-branch
   ./create-codespace-and-checkout.sh -x -b my-branch  # Skip interactive prompts
-  REPO=myorg/myrepo ./create-codespace-and-checkout.sh  # Interactive mode
+  ./create-codespace-and-checkout.sh  # Interactive mode, branch optional
+  REPO=myorg/myrepo ./create-codespace-and-checkout.sh -x  # Use defaults, no branch checkout
 EOF
     exit 0
 }
@@ -183,7 +184,7 @@ REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
 if [ "$IMMEDIATE_MODE" = false ]; then
     # Prompt for repository if not specified
     if [ "$REPO" = "github/github" ]; then
-        REPO_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --placeholder "Repository (default: github/github)" --value "$REPO")
+        REPO_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Repository: " --placeholder "github/github")
         if [ -n "$REPO_INPUT" ]; then
             REPO="$REPO_INPUT"
             REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
@@ -192,7 +193,7 @@ if [ "$IMMEDIATE_MODE" = false ]; then
     
     # Prompt for machine type if not specified
     if [ "$CODESPACE_SIZE" = "xLargePremiumLinux" ]; then
-        CODESPACE_SIZE_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --placeholder "Machine type (default: xLargePremiumLinux)" --value "$CODESPACE_SIZE")
+        CODESPACE_SIZE_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Machine type: " --placeholder "xLargePremiumLinux")
         if [ -n "$CODESPACE_SIZE_INPUT" ]; then
             CODESPACE_SIZE="$CODESPACE_SIZE_INPUT"
         fi
@@ -200,24 +201,19 @@ if [ "$IMMEDIATE_MODE" = false ]; then
     
     # Prompt for devcontainer path if not specified
     if [ "$DEVCONTAINER_PATH" = ".devcontainer/devcontainer.json" ]; then
-        DEVCONTAINER_PATH_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --placeholder "Devcontainer path (default: .devcontainer/devcontainer.json)" --value "$DEVCONTAINER_PATH")
+        DEVCONTAINER_PATH_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Devcontainer path: " --placeholder ".devcontainer/devcontainer.json")
         if [ -n "$DEVCONTAINER_PATH_INPUT" ]; then
             DEVCONTAINER_PATH="$DEVCONTAINER_PATH_INPUT"
         fi
     fi
     
-    # Prompt for branch name if not specified
+    # Prompt for branch name if not specified (optional)
     if [ -z "$BRANCH_NAME" ]; then
-        BRANCH_NAME=$(mise x ubi:charmbracelet/gum -- gum input --placeholder "Enter the branch name to checkout")
+        BRANCH_NAME=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Branch name (optional): " --placeholder "Leave empty to skip checkout")
     fi
 fi
 
-# Validate required parameters
-if [ -z "$BRANCH_NAME" ]; then
-    print_error "Branch name is required"
-    echo "Use -b <branch> to specify a branch or run without -x for interactive mode"
-    exit 1
-fi
+# Branch name is optional - if not provided, skip checkout step
 
 print_status "Starting codespace creation process..."
 
@@ -276,28 +272,33 @@ else
     print_warning "Failed to upload xterm-ghostty terminfo. Terminal features may be limited."
 fi
 
-print_status "Checking if branch '$BRANCH_NAME' exists remotely..."
-REMOTE_CHECK=$(gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git ls-remote --heads origin $BRANCH_NAME'" 2>/dev/null || echo "")
-
-# Step 4: Checkout the branch
-if [ -n "$REMOTE_CHECK" ]; then
-    print_status "Branch '$BRANCH_NAME' exists remotely, checking out..."
-    if gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git checkout \"$BRANCH_NAME\"'" >/dev/null 2>&1; then
-        print_status "Successfully checked out branch '$BRANCH_NAME' in codespace '$CODESPACE_NAME'"
+# Step 4: Checkout the branch (optional - skip if no branch name provided)
+if [ -n "$BRANCH_NAME" ]; then
+    print_status "Checking if branch '$BRANCH_NAME' exists remotely..."
+    REMOTE_CHECK=$(gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git ls-remote --heads origin $BRANCH_NAME'" 2>/dev/null || echo "")
+    
+    if [ -n "$REMOTE_CHECK" ]; then
+        print_status "Branch '$BRANCH_NAME' exists remotely, checking out..."
+        if gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git checkout \"$BRANCH_NAME\"'" >/dev/null 2>&1; then
+            print_status "Successfully checked out branch '$BRANCH_NAME' in codespace '$CODESPACE_NAME'"
+        else
+            print_error "Failed to checkout branch '$BRANCH_NAME'"
+            print_warning "Codespace '$CODESPACE_NAME' was created but branch checkout failed"
+            exit 1
+        fi
     else
-        print_error "Failed to checkout branch '$BRANCH_NAME'"
-        print_warning "Codespace '$CODESPACE_NAME' was created but branch checkout failed"
-        exit 1
+        print_warning "Branch '$BRANCH_NAME' doesn't exist remotely. Creating new branch..."
+        if gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git checkout -b \"$BRANCH_NAME\"'" >/dev/null 2>&1; then
+            print_status "Successfully created and checked out branch '$BRANCH_NAME' in codespace '$CODESPACE_NAME'"
+        else
+            print_error "Failed to create branch '$BRANCH_NAME'"
+            print_warning "Codespace '$CODESPACE_NAME' was created but branch creation failed"
+            exit 1
+        fi
     fi
 else
-    print_warning "Branch '$BRANCH_NAME' doesn't exist remotely. Creating new branch..."
-    if gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git checkout -b \"$BRANCH_NAME\"'" >/dev/null 2>&1; then
-        print_status "Successfully checked out branch '$BRANCH_NAME' in codespace '$CODESPACE_NAME'"
-    else
-        print_error "Failed to checkout branch '$BRANCH_NAME'"
-        print_warning "Codespace '$CODESPACE_NAME' was created but branch checkout failed"
-        exit 1
-    fi
+    print_status "No branch name provided, skipping checkout step"
+    print_status "Codespace will use the default branch"
 fi
 
 # Step 5: Wait for codespace configuration to complete
@@ -317,5 +318,9 @@ else
     print_warning "The codespace may still be configuring in the background"
 fi
 
-print_status "Setup complete! Your codespace is ready with branch '$BRANCH_NAME' checked out."
+if [ -n "$BRANCH_NAME" ]; then
+    print_status "Setup complete! Your codespace is ready with branch '$BRANCH_NAME' checked out."
+else
+    print_status "Setup complete! Your codespace is ready with the default branch."
+fi
 print_status "Connect with: gh cs ssh -c $CODESPACE_NAME"
