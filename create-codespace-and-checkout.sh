@@ -194,7 +194,7 @@ REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
 if [ "$IMMEDIATE_MODE" = false ]; then
     # Prompt for repository if not specified
     if [ "$REPO" = "github/github" ]; then
-        REPO_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Repository: " --placeholder "github/github")
+        REPO_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Repository: " --placeholder "github/github") || exit 130
         if [ -n "$REPO_INPUT" ]; then
             REPO="$REPO_INPUT"
             REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
@@ -203,7 +203,7 @@ if [ "$IMMEDIATE_MODE" = false ]; then
     
     # Prompt for machine type if not specified
     if [ "$CODESPACE_SIZE" = "xLargePremiumLinux" ]; then
-        CODESPACE_SIZE_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Machine type: " --placeholder "xLargePremiumLinux")
+        CODESPACE_SIZE_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Machine type: " --placeholder "xLargePremiumLinux") || exit 130
         if [ -n "$CODESPACE_SIZE_INPUT" ]; then
             CODESPACE_SIZE="$CODESPACE_SIZE_INPUT"
         fi
@@ -211,7 +211,7 @@ if [ "$IMMEDIATE_MODE" = false ]; then
     
     # Prompt for devcontainer path if not specified
     if [ "$DEVCONTAINER_PATH" = ".devcontainer/devcontainer.json" ]; then
-        DEVCONTAINER_PATH_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Devcontainer path: " --placeholder ".devcontainer/devcontainer.json")
+        DEVCONTAINER_PATH_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Devcontainer path: " --placeholder ".devcontainer/devcontainer.json") || exit 130
         if [ -n "$DEVCONTAINER_PATH_INPUT" ]; then
             DEVCONTAINER_PATH="$DEVCONTAINER_PATH_INPUT"
         fi
@@ -219,7 +219,7 @@ if [ "$IMMEDIATE_MODE" = false ]; then
     
     # Prompt for branch name if not specified (optional)
     if [ -z "$BRANCH_NAME" ]; then
-        BRANCH_NAME=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Branch name (optional): " --placeholder "Leave empty to skip checkout")
+        BRANCH_NAME=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Branch name (optional): " --placeholder "Leave empty to skip checkout") || exit 130
     fi
 fi
 
