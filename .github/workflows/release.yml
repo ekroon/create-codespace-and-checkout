@@ -24,9 +24,15 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref_name }}
 
-      - name: Make script executable
+      - name: Bundle scripts into single executable
         run: |
-          cp create-codespace-and-checkout.sh create-codespace-and-checkout
+          chmod +x bundle.sh
+          ./bundle.sh create-codespace-and-checkout
+
+      - name: Verify bundled script
+        run: |
+          bash -n create-codespace-and-checkout
+          ./create-codespace-and-checkout --help
 
       - name: Create GitHub Release and upload script
         uses: softprops/action-gh-release@v2
