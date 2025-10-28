@@ -10,6 +10,17 @@
 
 # set -e  # Exit on any error
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source the library modules
+# shellcheck source=lib.sh
+source "$SCRIPT_DIR/lib.sh"
+# shellcheck source=create-codespace.sh
+source "$SCRIPT_DIR/create-codespace.sh"
+# shellcheck source=codespace-commands.sh
+source "$SCRIPT_DIR/codespace-commands.sh"
+
 # Signal handler for clean exit on CTRL-C (SIGINT) and SIGTERM
 cleanup_on_exit() {
     echo ""
@@ -88,13 +99,7 @@ _gum_set_default() {
 }
 
 # Set default gum log styling (can be overridden via environment)
-_gum_set_default GUM_LOG_LEVEL_FOREGROUND 212
-_gum_set_default GUM_LOG_LEVEL_BOLD true
-_gum_set_default GUM_LOG_TIME_FOREGROUND 244
-_gum_set_default GUM_LOG_MESSAGE_FOREGROUND 254
-_gum_set_default GUM_LOG_KEY_FOREGROUND 240
-_gum_set_default GUM_LOG_VALUE_FOREGROUND 118
-_gum_set_default GUM_LOG_SEPARATOR_FOREGROUND 240
+init_gum_logging
 
 # Function to print status messages using gum log with structured formatting
 print_status() {
@@ -227,84 +232,28 @@ fi
 
 print_status "Starting codespace creation process..."
 
-# Step 1: Create the codespace and capture the output
-print_status "Creating new codespace with $CODESPACE_SIZE machine type..."
-if ! CODESPACE_OUTPUT=$(gh cs create -R "$REPO" -m "$CODESPACE_SIZE" --devcontainer-path "$DEVCONTAINER_PATH" $DEFAULT_PERMISSIONS 2>&1); then
-    # Check if the failure is due to permissions authorization required
-    if echo "$CODESPACE_OUTPUT" | grep -q "You must authorize or deny additional permissions"; then
-        print_error "Codespace creation requires additional permissions authorization"
-        print_error "Please authorize the permissions in your browser, then try again"
-        # Extract and display the authorization URL if present
-        AUTH_URL=$(echo "$CODESPACE_OUTPUT" | grep -o "https://github\.com/[^[:space:]]*")
-        if [ -n "$AUTH_URL" ]; then
-            print_status "Authorization URL: $AUTH_URL"
-        fi
-        print_warning "Alternatively, you can rerun this script with --default-permissions option"
-        exit 1
-    else
-        print_error "Failed to create codespace"
-        print_error "$CODESPACE_OUTPUT"
-        exit 1
-    fi
+# Step 1: Create the codespace
+if ! CODESPACE_NAME=$(create_codespace "$REPO" "$CODESPACE_SIZE" "$DEVCONTAINER_PATH" "$DEFAULT_PERMISSIONS"); then
+    exit 1
 fi
-
-
-# Extract the codespace name (last line of output)
-CODESPACE_NAME=$(echo "$CODESPACE_OUTPUT" | tail -n 1 | tr -d '\r\n')
-
-print_status "Codespace created successfully: $CODESPACE_NAME"
 
 # Step 2: Wait for the codespace to be fully ready
-print_status "Waiting for codespace to be fully ready..."
-
-if ! retry_until 30 10 "Checking codespace readiness" \
-    gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'test -d /workspaces/$REPO_NAME && cd /workspaces/$REPO_NAME && pwd'"; then
-    print_error "Codespace failed to become ready after 30 attempts"
+if ! wait_for_codespace_ready "$CODESPACE_NAME" "$REPO_NAME"; then
     exit 1
 fi
-
-print_status "Codespace is ready!"
 
 # Step 3: Fetch latest remote information (silently with progress indicator)
-mise x ubi:charmbracelet/gum -- gum spin --spinner dot --title "Fetching latest remote information..." -- gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git fetch origin'"
-FETCH_EXIT_CODE=$?
-
-if [ $FETCH_EXIT_CODE -ne 0 ]; then
-    print_error "Failed to fetch from remote. Git authentication may not be ready yet."
-    print_warning "Try connecting to the codespace manually: gh cs ssh -c $CODESPACE_NAME"
+if ! fetch_remote "$CODESPACE_NAME" "$REPO_NAME"; then
     exit 1
 fi
 
-print_status "Uploading xterm-ghostty terminfo to codespace..."
-if infocmp -x xterm-ghostty | gh cs ssh -c "$CODESPACE_NAME" -- tic -x - >/dev/null 2>&1; then
-    print_status "Successfully uploaded xterm-ghostty terminfo."
-else
-    print_warning "Failed to upload xterm-ghostty terminfo. Terminal features may be limited."
-fi
+# Upload terminfo for terminal compatibility
+upload_terminfo "$CODESPACE_NAME" "xterm-ghostty"
 
 # Step 4: Checkout the branch (optional - skip if no branch name provided)
 if [ -n "$BRANCH_NAME" ]; then
-    print_status "Checking if branch '$BRANCH_NAME' exists remotely..."
-    REMOTE_CHECK=$(gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git ls-remote --heads origin $BRANCH_NAME'" 2>/dev/null || echo "")
-    
-    if [ -n "$REMOTE_CHECK" ]; then
-        print_status "Branch '$BRANCH_NAME' exists remotely, checking out..."
-        if gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git checkout \"$BRANCH_NAME\"'" >/dev/null 2>&1; then
-            print_status "Successfully checked out branch '$BRANCH_NAME' in codespace '$CODESPACE_NAME'"
-        else
-            print_error "Failed to checkout branch '$BRANCH_NAME'"
-            print_warning "Codespace '$CODESPACE_NAME' was created but branch checkout failed"
-            exit 1
-        fi
-    else
-        print_warning "Branch '$BRANCH_NAME' doesn't exist remotely. Creating new branch..."
-        if gh cs ssh -c "$CODESPACE_NAME" -- "bash -l -c 'cd /workspaces/$REPO_NAME && git checkout -b \"$BRANCH_NAME\"'" >/dev/null 2>&1; then
-            print_status "Successfully created and checked out branch '$BRANCH_NAME' in codespace '$CODESPACE_NAME'"
-        else
-            print_error "Failed to create branch '$BRANCH_NAME'"
-            print_warning "Codespace '$CODESPACE_NAME' was created but branch creation failed"
-            exit 1
-        fi
+    if ! checkout_branch "$CODESPACE_NAME" "$REPO_NAME" "$BRANCH_NAME"; then
+        exit 1
     fi
 else
     print_status "No branch name provided, skipping checkout step"
@@ -312,21 +261,7 @@ else
 fi
 
 # Step 5: Wait for codespace configuration to complete
-print_status "Waiting for codespace configuration to complete..."
-
-# Helper function to check if configuration is complete
-_check_config_complete() {
-    local last_log
-    last_log=$(gh cs logs --codespace "$CODESPACE_NAME" 2>/dev/null | tail -n 1 || echo "")
-    [[ "$last_log" == *"Finished configuring codespace."* ]]
-}
-
-if retry_until 60 10 "Checking configuration status" _check_config_complete; then
-    print_status "Codespace configuration complete! ✓"
-else
-    print_warning "Codespace configuration did not complete after 60 attempts"
-    print_warning "The codespace may still be configuring in the background"
-fi
+wait_for_configuration_complete "$CODESPACE_NAME"
 
 if [ -n "$BRANCH_NAME" ]; then
     print_status "Setup complete! Your codespace is ready with branch '$BRANCH_NAME' checked out."

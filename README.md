@@ -97,3 +97,27 @@ Common machine types include:
 
 For the most up-to-date list, check the [GitHub Codespaces documentation](https://docs.github.com/en/codespaces/setting-up-your-project-for-codespaces/setting-a-minimum-specification-for-codespace-machines).
 
+## Development
+
+### Project Structure
+
+The script has been modularized into separate components:
+- `create-codespace-and-checkout.sh` - Main script with argument parsing and orchestration
+- `lib.sh` - Common library functions (logging, retry logic)
+- `create-codespace.sh` - Codespace creation module
+- `codespace-commands.sh` - Module for running commands in codespaces with retry logic
+- `tests/` - Test suite for all modules
+
+This modular structure makes the code easier to maintain, test, and extend.
+
+### Testing
+
+The project includes a comprehensive test suite. To run the tests:
+
+```bash
+./tests/run_tests.sh
+```
+
+See [tests/README.md](tests/README.md) for more details about the test suite.
+
+
