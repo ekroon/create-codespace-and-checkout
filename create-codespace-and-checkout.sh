@@ -90,55 +90,8 @@ if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
     exit 1
 fi
 
-# Helper function to set gum log style defaults
-_gum_set_default() {
-    # $1 = var name, $2 = default value
-    if [ -z "${!1+x}" ]; then
-        export "$1=$2"
-    fi
-}
-
-# Set default gum log styling (can be overridden via environment)
+# Initialize gum log styling (can be overridden via environment)
 init_gum_logging
-
-# Function to print status messages using gum log with structured formatting
-print_status() {
-    mise x ubi:charmbracelet/gum -- gum log --structured --level info --time rfc822 "$1"
-}
-
-print_warning() {
-    mise x ubi:charmbracelet/gum -- gum log --structured --level warn --time rfc822 "$1"
-}
-
-print_error() {
-    mise x ubi:charmbracelet/gum -- gum log --structured --level error --time rfc822 "$1"
-}
-
-# Generic retry function for waiting on conditions
-# Usage: retry_until <max_attempts> <sleep_seconds> <description> <command>
-retry_until() {
-    local max_attempts=$1
-    local sleep_seconds=$2
-    local description=$3
-    shift 3
-    local command=("$@")
-    
-    local attempt=1
-    while [ $attempt -le "$max_attempts" ]; do
-        print_status "$description (attempt $attempt/$max_attempts)..."
-        
-        if "${command[@]}" >/dev/null 2>&1; then
-            return 0
-        fi
-        
-        if [ $attempt -eq "$max_attempts" ]; then
-            return 1
-        fi
-        
-        sleep "$sleep_seconds"
-        attempt=$((attempt + 1))
-    done
-}
 
 # Set defaults from environment variables or use built-in defaults
 REPO=${REPO:-"github/github"}
