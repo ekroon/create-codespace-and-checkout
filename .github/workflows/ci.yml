@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: |
+          chmod +x *.sh tests/*.sh
+
+      - name: Run tests
+        run: |
+          ./tests/run_tests.sh
+
+      - name: Verify main script syntax
+        run: |
+          bash -n create-codespace-and-checkout.sh
+
+      - name: Verify module syntax
+        run: |
+          for file in lib.sh create-codespace.sh codespace-commands.sh; do
+            bash -n "$file"
+          done
