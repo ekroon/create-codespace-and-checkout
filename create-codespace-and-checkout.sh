@@ -5,6 +5,7 @@
 # Options:
 #   -R <repo>               Repository (default: github/github, env: REPO)
 #   -m <machine-type>       Codespace machine type (default: xLargePremiumLinux, env: CODESPACE_SIZE)
+#   -d <display-name>       Display name for codespace (48 chars max, env: CODESPACE_DISPLAY_NAME)
 #   --devcontainer-path <path>  Path to devcontainer (default: .devcontainer/devcontainer.json, env: DEVCONTAINER_PATH)
 #   --default-permissions   Use default permissions without authorization prompt
 
@@ -31,6 +32,7 @@ Options:
   -b <branch>                  Branch name to checkout (optional, if not provided uses default branch)
   -R <repo>                    Repository (default: github/github, env: REPO)
   -m <machine-type>            Codespace machine type (default: xLargePremiumLinux, env: CODESPACE_SIZE)
+  -d <display-name>            Display name for the codespace (48 characters or less, env: CODESPACE_DISPLAY_NAME)
   --devcontainer-path <path>   Path to devcontainer (default: .devcontainer/devcontainer.json, env: DEVCONTAINER_PATH)
   --default-permissions        Use default permissions without authorization prompt
   -x, --immediate              Skip interactive prompts for unspecified options (use defaults)
@@ -39,12 +41,14 @@ Options:
 Environment Variables:
   REPO                         Override default repository
   CODESPACE_SIZE              Override default machine type
+  CODESPACE_DISPLAY_NAME      Override display name for codespace
   DEVCONTAINER_PATH           Override default devcontainer path
   GUM_LOG_*                   Customize log formatting (see gum log documentation)
 
 Examples:
   ./create-codespace-and-checkout.sh -b my-branch
   ./create-codespace-and-checkout.sh -R myorg/myrepo -m large -b my-branch
+  ./create-codespace-and-checkout.sh -d "my-feature-work" -b my-branch
   ./create-codespace-and-checkout.sh -x -b my-branch  # Skip interactive prompts
   ./create-codespace-and-checkout.sh  # Interactive mode, branch optional
   REPO=myorg/myrepo ./create-codespace-and-checkout.sh -x  # Use defaults, no branch checkout
@@ -139,6 +143,7 @@ retry_until() {
 REPO=${REPO:-"github/github"}
 CODESPACE_SIZE=${CODESPACE_SIZE:-"xLargePremiumLinux"}
 DEVCONTAINER_PATH=${DEVCONTAINER_PATH:-".devcontainer/devcontainer.json"}
+DISPLAY_NAME=${CODESPACE_DISPLAY_NAME:-""}
 DEFAULT_PERMISSIONS=""
 BRANCH_NAME=""
 IMMEDIATE_MODE=false
@@ -159,6 +164,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -m)
             CODESPACE_SIZE="$2"
+            shift 2
+            ;;
+        -d)
+            DISPLAY_NAME="$2"
             shift 2
             ;;
         --devcontainer-path)
@@ -217,6 +226,11 @@ if [ "$IMMEDIATE_MODE" = false ]; then
         fi
     fi
     
+    # Prompt for display name if not specified (optional)
+    if [ -z "$DISPLAY_NAME" ]; then
+        DISPLAY_NAME=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Display name (optional): " --placeholder "Leave empty for auto-generated name") || exit 130
+    fi
+    
     # Prompt for branch name if not specified (optional)
     if [ -z "$BRANCH_NAME" ]; then
         BRANCH_NAME=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Branch name (optional): " --placeholder "Leave empty to skip checkout") || exit 130
@@ -228,8 +242,14 @@ fi
 print_status "Starting codespace creation process..."
 
 # Step 1: Create the codespace and capture the output
+# Build display name flag conditionally
+DISPLAY_NAME_FLAG=""
+if [ -n "$DISPLAY_NAME" ]; then
+    DISPLAY_NAME_FLAG="--display-name"
+fi
+
 print_status "Creating new codespace with $CODESPACE_SIZE machine type..."
-if ! CODESPACE_OUTPUT=$(gh cs create -R "$REPO" -m "$CODESPACE_SIZE" --devcontainer-path "$DEVCONTAINER_PATH" $DEFAULT_PERMISSIONS 2>&1); then
+if ! CODESPACE_OUTPUT=$(gh cs create -R "$REPO" -m "$CODESPACE_SIZE" --devcontainer-path "$DEVCONTAINER_PATH" $DISPLAY_NAME_FLAG "$DISPLAY_NAME" $DEFAULT_PERMISSIONS 2>&1); then
     # Check if the failure is due to permissions authorization required
     if echo "$CODESPACE_OUTPUT" | grep -q "You must authorize or deny additional permissions"; then
         print_error "Codespace creation requires additional permissions authorization"

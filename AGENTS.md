@@ -37,9 +37,10 @@ shellcheck -s bash create-codespace-and-checkout.sh   # Explicit dialect
 
 ```bash
 # Test with ekroon repository and small machine type
-./create-codespace-and-checkout.sh -R github/ekroon -m basicLinux -b test-branch
-./create-codespace-and-checkout.sh -x -R github/ekroon -m basicLinux -b test-branch
-./create-codespace-and-checkout.sh -x -R github/ekroon -m basicLinux
+./create-codespace-and-checkout.sh -R github/ekroon -m standardLinux32gb -b test-branch
+./create-codespace-and-checkout.sh -x -R github/ekroon -m standardLinux32gb -b test-branch
+./create-codespace-and-checkout.sh -x -R github/ekroon -m standardLinux32gb
+./create-codespace-and-checkout.sh -x -R github/ekroon -m standardLinux32gb -d "test-display-name"
 ```
 
 After testing, clean up:
@@ -49,7 +50,7 @@ gh cs list                           # List codespaces
 gh cs delete -c <codespace-name>     # Delete test codespace
 ```
 
-**Do NOT test with large machine types** - use `basicLinux` (2 cores, 8GB RAM).
+**Do NOT test with large machine types** - use `standardLinux32gb` (4 cores, 16 GB RAM).
 
 ## Code Style Guidelines
 
