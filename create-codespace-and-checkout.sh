@@ -226,15 +226,27 @@ if [ "$IMMEDIATE_MODE" = false ]; then
         fi
     fi
     
-    # Prompt for display name if not specified (optional)
-    if [ -z "$DISPLAY_NAME" ]; then
-        DISPLAY_NAME=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Display name (optional): " --placeholder "Leave empty for auto-generated name") || exit 130
-    fi
-    
     # Prompt for branch name if not specified (optional)
+    # Note: Branch name is prompted before display name so we can use it as default
     if [ -z "$BRANCH_NAME" ]; then
         BRANCH_NAME=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Branch name (optional): " --placeholder "Leave empty to skip checkout") || exit 130
     fi
+    
+    # Prompt for display name if not specified (optional)
+    # Default to branch name (truncated to 48 chars) if branch is set
+    if [ -z "$DISPLAY_NAME" ]; then
+        default_display_name=""
+        if [ -n "$BRANCH_NAME" ]; then
+            default_display_name="${BRANCH_NAME:0:48}"
+        fi
+        DISPLAY_NAME=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Display name (optional): " --value "$default_display_name" --placeholder "Leave empty for auto-generated name") || exit 130
+    fi
+fi
+
+# Auto-set display name from branch name when not specified
+# This applies to both immediate mode and when branch was provided via -b flag
+if [ -z "$DISPLAY_NAME" ] && [ -n "$BRANCH_NAME" ]; then
+    DISPLAY_NAME="${BRANCH_NAME:0:48}"
 fi
 
 # Branch name is optional - if not provided, skip checkout step
