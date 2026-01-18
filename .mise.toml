@@ -1,0 +1,4 @@
+[tools]
+shellcheck = "latest"
+"ubi:charmbracelet/gum" = "latest"
+"npm:@github/copilot" = "latest"
