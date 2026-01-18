@@ -1,0 +1,21 @@
+{
+  "name": "create-codespace-and-checkout",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers-extra/features/mise:1": {},
+    "ghcr.io/devcontainers/features/node:1": {}
+  },
+  "mounts": [
+    "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind,readonly"
+  ],
+  "postCreateCommand": "mise trust && mise install && if [ ! -d ~/dotfiles ]; then git clone https://github.com/ekroon/dotfiles.git ~/dotfiles && cd ~/dotfiles && [ -f install.sh ] && ./install.sh || [ -f install ] && ./install || true; fi",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "timonwong.shellcheck",
+        "mads-hartmann.bash-ide-vscode"
+      ]
+    }
+  }
+}
