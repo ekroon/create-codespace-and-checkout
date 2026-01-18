@@ -10,9 +10,10 @@
       "installOhMyZsh": true
     }
   },
-  "mounts": [
-    "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind"
-  ],
+  "containerEnv": {
+    "GH_TOKEN": "${localEnv:GH_TOKEN}",
+    "GITHUB_TOKEN": "${localEnv:GH_TOKEN}"
+  },
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "customizations": {
     "vscode": {
