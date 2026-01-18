@@ -5,7 +5,8 @@
 # that was previously handled in post-create.sh.
 #
 # Usage:
-#   ./start-devcontainer.sh                           # Interactive mode
+#   ./start-devcontainer.sh                           # Interactive mode (start only)
+#   ./start-devcontainer.sh -c                        # Start and connect with zsh
 #   ./start-devcontainer.sh -w /path/to/workspace     # Specify workspace
 #   ./start-devcontainer.sh -r owner/dotfiles-repo    # Custom dotfiles repo
 #   ./start-devcontainer.sh -x                        # Skip prompts (use defaults)
@@ -25,6 +26,7 @@ DOTFILES_REPO=""
 DOTFILES_TARGET=""
 DOTFILES_INSTALL_CMD=""
 SKIP_PROMPTS=false
+CONNECT_AFTER_START=false
 EXTRA_ARGS=()
 
 # -----------------------------------------------------------------------------
@@ -56,15 +58,17 @@ Options:
     -t, --dotfiles-target PATH     Path to clone dotfiles to (default: $DEFAULT_DOTFILES_TARGET)
     -i, --dotfiles-install CMD     Install command to run (default: $DEFAULT_DOTFILES_INSTALL_COMMAND)
     -n, --no-dotfiles              Skip dotfiles installation
+    -c, --connect                  Connect to the container after starting (opens zsh)
     -x, --skip-prompts             Use defaults without prompting
     -h, --help                     Show this help message
 
 Examples:
     $(basename "$0")
+    $(basename "$0") -c                              # Start and connect
     $(basename "$0") -w ./my-project
     $(basename "$0") -r https://github.com/myuser/dotfiles.git
     $(basename "$0") -r myuser/dotfiles -i bootstrap.sh
-    $(basename "$0") -x -w ./my-project
+    $(basename "$0") -x -c -w ./my-project           # Non-interactive start and connect
 
 EOF
     exit 0
@@ -85,11 +89,21 @@ check_dependencies() {
         missing_deps+=("docker")
     fi
 
+    if ! command -v gh &>/dev/null; then
+        missing_deps+=("gh (GitHub CLI)")
+    fi
+
     if [ ${#missing_deps[@]} -gt 0 ]; then
         print_error "Missing required dependencies:"
         for dep in "${missing_deps[@]}"; do
             echo "  - $dep"
         done
+        exit 1
+    fi
+
+    # Check gh authentication
+    if ! gh auth status &>/dev/null; then
+        print_error "Not logged in to GitHub CLI. Run 'gh auth login' first."
         exit 1
     fi
 }
@@ -123,6 +137,10 @@ parse_args() {
                 ;;
             -x|--skip-prompts)
                 SKIP_PROMPTS=true
+                shift
+                ;;
+            -c|--connect)
+                CONNECT_AFTER_START=true
                 shift
                 ;;
             -h|--help)
@@ -237,6 +255,10 @@ prompt_basic() {
 # -----------------------------------------------------------------------------
 
 start_devcontainer() {
+    # Export GH_TOKEN for the devcontainer to use during postCreateCommand
+    export GH_TOKEN
+    GH_TOKEN=$(gh auth token)
+
     local cmd=(devcontainer up --workspace-folder "$WORKSPACE_FOLDER")
 
     # Add dotfiles configuration if not skipped
@@ -264,11 +286,28 @@ start_devcontainer() {
     "${cmd[@]}"
 }
 
+connect_to_container() {
+    local gh_token
+    gh_token=$(gh auth token)
+
+    print_status "Connecting to devcontainer..."
+    
+    # Use devcontainer exec with remote-env to pass GH_TOKEN and start zsh
+    devcontainer exec \
+        --workspace-folder "$WORKSPACE_FOLDER" \
+        --remote-env "GH_TOKEN=$gh_token" \
+        zsh -l
+}
+
 main() {
     check_dependencies
     parse_args "$@"
     prompt_configuration
     start_devcontainer
+
+    if [ "$CONNECT_AFTER_START" = true ]; then
+        connect_to_container
+    fi
 }
 
 main "$@"
