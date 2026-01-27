@@ -126,12 +126,7 @@ _fetch_machine_types() {
 _get_machine_name_from_display() {
     local machine_types=$1
     local display_name=$2
-    echo "$machine_types" | while IFS=$'\t' read -r name display; do
-        if [ "$display" = "$display_name" ]; then
-            echo "$name"
-            break
-        fi
-    done
+    echo "$machine_types" | awk -F'\t' -v display="$display_name" '$2 == display { print $1; exit }'
 }
 
 # Get display name from machine name
@@ -139,12 +134,7 @@ _get_machine_name_from_display() {
 _get_display_name_from_machine() {
     local machine_types=$1
     local machine_name=$2
-    echo "$machine_types" | while IFS=$'\t' read -r name display; do
-        if [ "$name" = "$machine_name" ]; then
-            echo "$display"
-            break
-        fi
-    done
+    echo "$machine_types" | awk -F'\t' -v name="$machine_name" '$1 == name { print $2; exit }'
 }
 
 # Extract display names from machine types
