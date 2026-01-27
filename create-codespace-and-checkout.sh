@@ -118,7 +118,7 @@ print_error() {
 # Returns machine types as newline-separated list, or empty on failure
 _fetch_machine_types() {
     local repo=$1
-    gh api "/repos/$repo/machines" --jq '.machines[].name' 2>/dev/null
+    gh api "/repos/$repo/codespaces/machines" --jq '.machines[].name' 2>/dev/null
 }
 
 # Generic retry function for waiting on conditions
