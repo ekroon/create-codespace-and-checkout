@@ -101,9 +101,9 @@ Exit codes:
 ```bash
 # Capture output and check exit code
 if ! OUTPUT=$(some_command 2>&1); then
-    print_error "Command failed"
-    print_error "$OUTPUT"
-    exit 1
+  print_error "Command failed"
+  print_error "$OUTPUT"
+  exit 1
 fi
 ```
 
