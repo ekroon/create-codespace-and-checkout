@@ -184,8 +184,9 @@ retry_until() {
 }
 
 # Set defaults from environment variables or use built-in defaults
+DEFAULT_MACHINE_TYPE="xLargePremiumLinux"
 REPO=${REPO:-"github/github"}
-CODESPACE_SIZE=${CODESPACE_SIZE:-"xLargePremiumLinux"}
+CODESPACE_SIZE=${CODESPACE_SIZE:-"$DEFAULT_MACHINE_TYPE"}
 DEVCONTAINER_PATH=${DEVCONTAINER_PATH:-".devcontainer/devcontainer.json"}
 DISPLAY_NAME=${CODESPACE_DISPLAY_NAME:-""}
 DEFAULT_PERMISSIONS=""
@@ -255,18 +256,18 @@ if [ "$IMMEDIATE_MODE" = false ]; then
     fi
     
     # Prompt for machine type if not specified
-    if [ "$CODESPACE_SIZE" = "xLargePremiumLinux" ]; then
+    if [ "$CODESPACE_SIZE" = "$DEFAULT_MACHINE_TYPE" ]; then
         MACHINE_TYPES=$(_fetch_machine_types "$REPO")
         if [ -n "$MACHINE_TYPES" ]; then
             _parse_machine_types "$MACHINE_TYPES"
-            DEFAULT_DISPLAY_NAME=${DISPLAY_BY_NAME[xLargePremiumLinux]}
+            DEFAULT_DISPLAY_NAME=${DISPLAY_BY_NAME[$DEFAULT_MACHINE_TYPE]}
 
             SELECTED_DISPLAY_NAME=$(printf '%s\n' "${DISPLAY_NAMES[@]}" | _gum_choose_machine_type "$DEFAULT_DISPLAY_NAME") || exit 130
             CODESPACE_SIZE=${NAME_BY_DISPLAY[$SELECTED_DISPLAY_NAME]}
         else
             # Fallback to text input if API call fails
             print_warning "Could not fetch machine types from API, using text input"
-            CODESPACE_SIZE_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Machine type: " --placeholder "xLargePremiumLinux") || exit 130
+            CODESPACE_SIZE_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Machine type: " --placeholder "$DEFAULT_MACHINE_TYPE") || exit 130
             if [ -n "$CODESPACE_SIZE_INPUT" ]; then
                 CODESPACE_SIZE="$CODESPACE_SIZE_INPUT"
             fi
