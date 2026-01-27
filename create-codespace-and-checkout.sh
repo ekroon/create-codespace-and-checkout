@@ -121,27 +121,40 @@ _fetch_machine_types() {
     gh api "/repos/$repo/codespaces/machines" --jq '.machines[] | "\(.name)\t\(.display_name)"' 2>/dev/null
 }
 
-# Get machine name from display name
-# Usage: _get_machine_name_from_display <machine_types> <display_name>
-_get_machine_name_from_display() {
+declare -A DISPLAY_BY_NAME
+declare -A NAME_BY_DISPLAY
+declare -a DISPLAY_NAMES
+
+# Parse machine types into lookup maps and ordered display list
+# Usage: _parse_machine_types <machine_types>
+_parse_machine_types() {
     local machine_types=$1
-    local display_name=$2
-    echo "$machine_types" | awk -F'\t' -v display="$display_name" '$2 == display { print $1; exit }'
+    local name
+    local display_name
+
+    DISPLAY_BY_NAME=()
+    NAME_BY_DISPLAY=()
+    DISPLAY_NAMES=()
+
+    while IFS=$'\t' read -r name display_name; do
+        [ -z "$name" ] && continue
+        DISPLAY_BY_NAME["$name"]="$display_name"
+        NAME_BY_DISPLAY["$display_name"]="$name"
+        DISPLAY_NAMES+=("$display_name")
+    done <<<"$machine_types"
 }
 
-# Get display name from machine name
-# Usage: _get_display_name_from_machine <machine_types> <machine_name>
-_get_display_name_from_machine() {
-    local machine_types=$1
-    local machine_name=$2
-    echo "$machine_types" | awk -F'\t' -v name="$machine_name" '$1 == name { print $2; exit }'
-}
+# Choose machine type display name with optional preselect
+# Usage: _gum_choose_machine_type <default_display_name>
+_gum_choose_machine_type() {
+    local default_display_name=$1
+    local choose_args=(--header "Select machine type:")
 
-# Extract display names from machine types
-# Usage: _get_display_names <machine_types>
-_get_display_names() {
-    local machine_types=$1
-    echo "$machine_types" | cut -f2
+    if [ -n "$default_display_name" ]; then
+        choose_args+=(--selected "$default_display_name")
+    fi
+
+    mise x ubi:charmbracelet/gum -- gum choose "${choose_args[@]}"
 }
 
 # Generic retry function for waiting on conditions
@@ -245,23 +258,11 @@ if [ "$IMMEDIATE_MODE" = false ]; then
     if [ "$CODESPACE_SIZE" = "xLargePremiumLinux" ]; then
         MACHINE_TYPES=$(_fetch_machine_types "$REPO")
         if [ -n "$MACHINE_TYPES" ]; then
-            # Extract display names for the dropdown
-            DISPLAY_NAMES=$(_get_display_names "$MACHINE_TYPES")
-            # Check if default machine type exists and get its display name
-            DEFAULT_MACHINE_TYPE="xLargePremiumLinux"
-            DEFAULT_DISPLAY_NAME=$(_get_display_name_from_machine "$MACHINE_TYPES" "$DEFAULT_MACHINE_TYPE")
-            
-            # Use gum choose with display names, pre-selecting default if available
-            if [ -n "$DEFAULT_DISPLAY_NAME" ]; then
-                SELECTED_DISPLAY_NAME=$(echo "$DISPLAY_NAMES" | mise x ubi:charmbracelet/gum -- gum choose --header "Select machine type:" --selected "$DEFAULT_DISPLAY_NAME") || exit 130
-            else
-                SELECTED_DISPLAY_NAME=$(echo "$DISPLAY_NAMES" | mise x ubi:charmbracelet/gum -- gum choose --header "Select machine type:") || exit 130
-            fi
-            
-            # Map selected display name back to machine name
-            if [ -n "$SELECTED_DISPLAY_NAME" ]; then
-                CODESPACE_SIZE=$(_get_machine_name_from_display "$MACHINE_TYPES" "$SELECTED_DISPLAY_NAME")
-            fi
+            _parse_machine_types "$MACHINE_TYPES"
+            DEFAULT_DISPLAY_NAME=${DISPLAY_BY_NAME[xLargePremiumLinux]}
+
+            SELECTED_DISPLAY_NAME=$(printf '%s\n' "${DISPLAY_NAMES[@]}" | _gum_choose_machine_type "$DEFAULT_DISPLAY_NAME") || exit 130
+            CODESPACE_SIZE=${NAME_BY_DISPLAY[$SELECTED_DISPLAY_NAME]}
         else
             # Fallback to text input if API call fails
             print_warning "Could not fetch machine types from API, using text input"
