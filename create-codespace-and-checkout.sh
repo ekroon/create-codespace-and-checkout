@@ -113,6 +113,14 @@ print_error() {
     mise x ubi:charmbracelet/gum -- gum log --structured --level error --time rfc822 "$1"
 }
 
+# Fetch available machine types for a repository
+# Usage: _fetch_machine_types <repo>
+# Returns machine types as newline-separated list, or empty on failure
+_fetch_machine_types() {
+    local repo=$1
+    gh api "/repos/$repo/machines" --jq '.machines[].name' 2>/dev/null
+}
+
 # Generic retry function for waiting on conditions
 # Usage: retry_until <max_attempts> <sleep_seconds> <description> <command>
 retry_until() {
@@ -212,9 +220,20 @@ if [ "$IMMEDIATE_MODE" = false ]; then
     
     # Prompt for machine type if not specified
     if [ "$CODESPACE_SIZE" = "xLargePremiumLinux" ]; then
-        CODESPACE_SIZE_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Machine type: " --placeholder "xLargePremiumLinux") || exit 130
-        if [ -n "$CODESPACE_SIZE_INPUT" ]; then
-            CODESPACE_SIZE="$CODESPACE_SIZE_INPUT"
+        MACHINE_TYPES=$(_fetch_machine_types "$REPO")
+        if [ -n "$MACHINE_TYPES" ]; then
+            # Use gum choose with fetched machine types, pre-selecting the default
+            CODESPACE_SIZE_INPUT=$(echo "$MACHINE_TYPES" | mise x ubi:charmbracelet/gum -- gum choose --header "Select machine type:" --selected "$CODESPACE_SIZE") || exit 130
+            if [ -n "$CODESPACE_SIZE_INPUT" ]; then
+                CODESPACE_SIZE="$CODESPACE_SIZE_INPUT"
+            fi
+        else
+            # Fallback to text input if API call fails
+            print_warning "Could not fetch machine types from API, using text input"
+            CODESPACE_SIZE_INPUT=$(mise x ubi:charmbracelet/gum -- gum input --prompt "Machine type: " --placeholder "xLargePremiumLinux") || exit 130
+            if [ -n "$CODESPACE_SIZE_INPUT" ]; then
+                CODESPACE_SIZE="$CODESPACE_SIZE_INPUT"
+            fi
         fi
     fi
     
