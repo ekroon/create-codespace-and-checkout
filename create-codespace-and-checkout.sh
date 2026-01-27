@@ -222,8 +222,8 @@ if [ "$IMMEDIATE_MODE" = false ]; then
     if [ "$CODESPACE_SIZE" = "xLargePremiumLinux" ]; then
         MACHINE_TYPES=$(_fetch_machine_types "$REPO")
         if [ -n "$MACHINE_TYPES" ]; then
-            # Use gum choose with fetched machine types, pre-selecting the default
-            CODESPACE_SIZE_INPUT=$(echo "$MACHINE_TYPES" | mise x ubi:charmbracelet/gum -- gum choose --header "Select machine type:" --selected "$CODESPACE_SIZE") || exit 130
+            # Use gum choose with fetched machine types
+            CODESPACE_SIZE_INPUT=$(echo "$MACHINE_TYPES" | mise x ubi:charmbracelet/gum -- gum choose --header "Select machine type:") || exit 130
             if [ -n "$CODESPACE_SIZE_INPUT" ]; then
                 CODESPACE_SIZE="$CODESPACE_SIZE_INPUT"
             fi
