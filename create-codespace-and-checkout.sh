@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Script to create a new codespace and checkout a git branch
 # Usage: ./create-codespace-and-checkout.sh [options] [branch-name]
